@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Локальний каталог з XLSX</title>
+  <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #f8f8f8; }
+    .container { max-width: 980px; margin: auto; background: #fff; padding: 20px; border-radius:10px; }
+    .category-btn { margin: 5px 10px 5px 0; padding: 7px 19px; border:none; border-radius:6px; background:#eee; cursor:pointer; }
+    .category-btn.active { background: #009688; color: #fff; }
+    table { border-collapse: collapse; width:100%; margin-top: 16px;}
+    th, td { border: 1px solid #ccc; padding: 9px 8px; }
+    th { background: #eee;}
+    input[type="number"] { width: 60px; padding:2px;}
+    .cart { margin-top: 24px; background: #def; border-radius:6px; padding:12px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>Каталог товарів з XLSX</h2>
+  <input type="file" id="fileInput" accept=".xlsx"/>
+  <div id="categories"></div>
+  <div id="productList"></div>
+  <div class="cart">
+    <h3>Кошик</h3>
+    <div id="cartList">Порожній</div>
+    <div id="cartTotal"></div>
+  </div>
+</div>
+<script>
+let allProducts = [];
+let filteredCategory = 'all';
+let cart = {};
+
+function renderCategories() {
+  const cats = ['all', ...Array.from(new Set(allProducts.map(p=>p.Category)))];
+  document.getElementById('categories').innerHTML = cats.map(cat =>
+    `<button class="category-btn${filteredCategory === cat ? ' active' : ''}" onclick="selectCategory('${cat}')">
+      ${cat === 'all' ? 'Всі категорії' : cat}
+    </button>`
+  ).join('');
+}
+
+function selectCategory(cat) {
+  filteredCategory = cat;
+  renderCategories();
+  renderProducts();
+}
+
+function renderProducts() {
+  let prods = filteredCategory === 'all' ?
+    allProducts : allProducts.filter(p => p.Category === filteredCategory);
+  if (prods.length === 0) {
+    document.getElementById('productList').innerHTML = 'Немає товарів.';
+    return;
+  }
+  let html = `<table><tr><th>Категорія</th><th>Назва</th><th>Ціна</th><th>В наявності</th><th>Додати</th></tr>`;
+  html += prods.map((prod,i)=>`
+    <tr>
+      <td>${prod.Category}</td>
+      <td>${prod.Name}</td>
+      <td>${prod.Price}</td>
+      <td>${prod.Stock}</td>
+      <td>
+        <input type="number" id="qty_${i}" min="1" max="${prod.Stock}" value="1"/>
+        <button onclick="addToCart(${i})">+</button>
+      </td>
+    </tr>
+  `).join('');
+  html += `</table>`;
+  document.getElementById('productList').innerHTML = html;
+}
+
+function addToCart(idx) {
+  let prods = filteredCategory === 'all' ?
+    allProducts : allProducts.filter(p => p.Category === filteredCategory);
+  const prod = prods[idx];
+  const input = document.getElementById('qty_' + idx);
+  const qty = parseInt(input.value);
+  if (!qty || qty < 1 || qty > prod.Stock) return alert('Невірна кількість');
+  if (!cart[prod.Name]) cart[prod.Name] = {...prod, quantity: 0};
+  cart[prod.Name].quantity += qty;
+  renderCart();
+}
+
+function renderCart() {
+  const items = Object.values(cart);
+  if (!items.length) {
+    document.getElementById('cartList').innerHTML = "Порожній";
+    document.getElementById('cartTotal').innerHTML = ""
+    return;
+  }
+  let total = 0;
+  let html = `<table><tr><th>Товар</th><th>Кількість</th><th>Ціна</th></tr>`;
+  html += items.map(itm => {
+    let sum = itm.Price * itm.quantity;
+    total += sum;
+    return `<tr><td>${itm.Name}</td><td>${itm.quantity}</td><td>${sum}</td></tr>`;
+  }).join('');
+  html += `</table>`;
+  document.getElementById('cartList').innerHTML = html;
+  document.getElementById('cartTotal').innerHTML = `<b>Всього: ${total}</b>`;
+}
+
+document.getElementById('fileInput').addEventListener('change', function(e){
+  if (!e.target.files.length) return;
+  const file = e.target.files[0];
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    const data = new Uint8Array(event.target.result);
+    const wb = XLSX.read(data, {type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    allProducts = XLSX.utils.sheet_to_json(ws);
+    renderCategories();
+    renderProducts();
+    cart = {};
+    renderCart();
+  };
+  reader.readAsArrayBuffer(file);
+});
+window.selectCategory = selectCategory;
+window.addToCart = addToCart;
+</script>
+</body>
+</html>
