@@ -2,39 +2,56 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8">
-  <title>Локальний каталог з XLSX</title>
-  <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+  <title>Каталог з Google Sheets</title>
   <style>
-    body { font-family: sans-serif; background: #f8f8f8; }
-    .container { max-width: 980px; margin: auto; background: #fff; padding: 20px; border-radius:10px; }
-    .category-btn { margin: 5px 10px 5px 0; padding: 7px 19px; border:none; border-radius:6px; background:#eee; cursor:pointer; }
+    body { font-family: sans-serif; background: #f8f8f8; margin:0 }
+    .container { max-width: 980px; margin: auto; background: #fff; padding: 24px; border-radius:10px; }
+    .category-btn { margin: 5px 10px 15px 0; padding: 7px 19px; border:none; border-radius:6px; background:#eee; cursor:pointer; }
     .category-btn.active { background: #009688; color: #fff; }
+    .card { display: flex; gap:16px; background:#fafcfa; margin-bottom:16px; border-radius:8px; padding: 10px 14px; box-shadow:0 2px 10px #ddd6 }
+    .card img { width: 112px; height: 112px; object-fit:cover; border-radius:6px; background:#ececec; }
+    .info { flex:1 }
+    .prodname { font-size:1.25em; margin-bottom:0 }
+    .price { color:#2196F3; font-weight:600 }
+    .cart { margin-top: 28px; background: #def; border-radius:6px; padding:17px; }
     table { border-collapse: collapse; width:100%; margin-top: 16px;}
     th, td { border: 1px solid #ccc; padding: 9px 8px; }
     th { background: #eee;}
-    input[type="number"] { width: 60px; padding:2px;}
-    .cart { margin-top: 24px; background: #def; border-radius:6px; padding:12px; }
+    input[type="number"] { width: 56px; }
   </style>
 </head>
 <body>
-<div class="container">
-  <h2>Каталог товарів з XLSX</h2>
-  <input type="file" id="fileInput" accept=".xlsx"/>
-  <div id="categories"></div>
-  <div id="productList"></div>
-  <div class="cart">
-    <h3>Кошик</h3>
-    <div id="cartList">Порожній</div>
-    <div id="cartTotal"></div>
+  <div class="container">
+    <h2>Каталог товарів з Google Sheets</h2>
+    <div id="categories"></div>
+    <div id="productList"></div>
+    <div class="cart">
+      <h3>Кошик</h3>
+      <div id="cartList">Порожній</div>
+      <div id="cartTotal"></div>
+    </div>
   </div>
-</div>
 <script>
+const SHEET_ID = '[translate:1LKIfZIoC4wrrHBuX7YgcaQ22Xcq5sWNvq4ZlIzY6_VY]'; // встав тут твій ID таблиці
+const SHEET_GID = '[translate:69860483]'; // найчастіше 0
+
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
+
 let allProducts = [];
 let filteredCategory = 'all';
 let cart = {};
 
+function parseCSV(csv){
+  const lines = csv.split('\n').filter(x=>x.trim());
+  const headers = lines[0].split(',');
+  return lines.slice(1).map(line=>{
+    const cols = line.split(',');
+    return headers.reduce((acc, h, i)=>{acc[h.trim()] = cols[i]?.trim()||''; return acc;}, {});
+  }).filter(row => row[translate:Category] && row[translate:Name]);
+}
+
 function renderCategories() {
-  const cats = ['all', ...Array.from(new Set(allProducts.map(p=>p.Category)))];
+  const cats = ['all', ...Array.from(new Set(allProducts.map(p=>p[translate:Category])))];
   document.getElementById('categories').innerHTML = cats.map(cat =>
     `<button class="category-btn${filteredCategory === cat ? ' active' : ''}" onclick="selectCategory('${cat}')">
       ${cat === 'all' ? 'Всі категорії' : cat}
@@ -50,75 +67,71 @@ function selectCategory(cat) {
 
 function renderProducts() {
   let prods = filteredCategory === 'all' ?
-    allProducts : allProducts.filter(p => p.Category === filteredCategory);
+    allProducts : allProducts.filter(p => p[translate:Category] === filteredCategory);
   if (prods.length === 0) {
-    document.getElementById('productList').innerHTML = 'Немає товарів.';
+    document.getElementById('productList').innerHTML = '[translate:Немає товарів.]';
     return;
   }
-  let html = `<table><tr><th>Категорія</th><th>Назва</th><th>Ціна</th><th>В наявності</th><th>Додати</th></tr>`;
-  html += prods.map((prod,i)=>`
-    <tr>
-      <td>${prod.Category}</td>
-      <td>${prod.Name}</td>
-      <td>${prod.Price}</td>
-      <td>${prod.Stock}</td>
-      <td>
-        <input type="number" id="qty_${i}" min="1" max="${prod.Stock}" value="1"/>
-        <button onclick="addToCart(${i})">+</button>
-      </td>
-    </tr>
+  let html = prods.map((prod,i)=>`
+    <div class="card">
+      <img src="${prod[translate:Image]||''}" alt="Фото"/>
+      <div class="info">
+        <p class="prodname">${prod[translate:Name]||prod[translate:Full_Name]||'Товар'}</p>
+        <div class="price">Ціна: ${prod[translate:Price]||'-'}</div>
+        <div>Залишок: ${prod[translate:Stock]||'-'}</div>
+        <div style="margin-top:7px">
+          <input type="number" id="qty_${i}" min="1" max="${prod[translate:Stock]||'99'}" value="1"/>
+          <button onclick="addToCart(${i})">Додати у кошик</button>
+        </div>
+      </div>
+    </div>
   `).join('');
-  html += `</table>`;
   document.getElementById('productList').innerHTML = html;
 }
 
 function addToCart(idx) {
   let prods = filteredCategory === 'all' ?
-    allProducts : allProducts.filter(p => p.Category === filteredCategory);
+    allProducts : allProducts.filter(p => p[translate:Category] === filteredCategory);
   const prod = prods[idx];
   const input = document.getElementById('qty_' + idx);
   const qty = parseInt(input.value);
-  if (!qty || qty < 1 || qty > prod.Stock) return alert('Невірна кількість');
-  if (!cart[prod.Name]) cart[prod.Name] = {...prod, quantity: 0};
-  cart[prod.Name].quantity += qty;
+  if (!qty || qty < 1 || qty > +prod[translate:Stock]) return alert('[translate:Невірна кількість]');
+  const key = prod[translate:Name]||prod[translate:Full_Name];
+  if (!cart[key]) cart[key] = {...prod, quantity: 0};
+  cart[key].quantity += qty;
   renderCart();
 }
 
 function renderCart() {
   const items = Object.values(cart);
   if (!items.length) {
-    document.getElementById('cartList').innerHTML = "Порожній";
+    document.getElementById('cartList').innerHTML = "[translate:Порожній]";
     document.getElementById('cartTotal').innerHTML = ""
     return;
   }
   let total = 0;
-  let html = `<table><tr><th>Товар</th><th>Кількість</th><th>Ціна</th></tr>`;
+  let html = `<table><tr><th>[translate:Товар]</th><th>[translate:Кількість]</th><th>[translate:Ціна]</th></tr>`;
   html += items.map(itm => {
-    let sum = itm.Price * itm.quantity;
+    let price = parseFloat(itm[translate:Price])||0;
+    let sum = price * itm.quantity;
     total += sum;
-    return `<tr><td>${itm.Name}</td><td>${itm.quantity}</td><td>${sum}</td></tr>`;
+    return `<tr><td>${itm[translate:Name]||itm[translate:Full_Name]}</td><td>${itm.quantity}</td><td>${sum}</td></tr>`;
   }).join('');
   html += `</table>`;
   document.getElementById('cartList').innerHTML = html;
-  document.getElementById('cartTotal').innerHTML = `<b>Всього: ${total}</b>`;
+  document.getElementById('cartTotal').innerHTML = `<b>[translate:Всього]: ${total}</b>`;
 }
 
-document.getElementById('fileInput').addEventListener('change', function(e){
-  if (!e.target.files.length) return;
-  const file = e.target.files[0];
-  const reader = new FileReader();
-  reader.onload = function(event) {
-    const data = new Uint8Array(event.target.result);
-    const wb = XLSX.read(data, {type:'array'});
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    allProducts = XLSX.utils.sheet_to_json(ws);
-    renderCategories();
-    renderProducts();
-    cart = {};
-    renderCart();
-  };
-  reader.readAsArrayBuffer(file);
-});
+fetch(CSV_URL)
+  .then(res=>res.text())
+  .then(csv=>{
+      allProducts = parseCSV(csv);
+      renderCategories();
+      renderProducts();
+      cart = {};
+      renderCart();
+  });
+
 window.selectCategory = selectCategory;
 window.addToCart = addToCart;
 </script>
