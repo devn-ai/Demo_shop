@@ -2,28 +2,23 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8">
-  <title>Каталог з Google Sheets</title>
+  <title>Каталог з Google Sheets: категорії як шапки</title>
   <style>
-    body { font-family: sans-serif; background: #f8f8f8; margin:0 }
+    body { font-family: sans-serif; background: #f8f8f8; }
     .container { max-width: 980px; margin: auto; background: #fff; padding: 24px; border-radius:10px; }
-    .category-btn { margin: 5px 10px 15px 0; padding: 7px 19px; border:none; border-radius:6px; background:#eee; cursor:pointer; }
-    .category-btn.active { background: #009688; color: #fff; }
-    .card { display: flex; gap:16px; background:#fafcfa; margin-bottom:16px; border-radius:8px; padding: 10px 14px; box-shadow:0 2px 10px #ddd6 }
-    .card img { width: 112px; height: 112px; object-fit:cover; border-radius:6px; background:#ececec; }
-    .info { flex:1 }
-    .prodname { font-size:1.25em; margin-bottom:0 }
-    .price { color:#2196F3; font-weight:600 }
-    .cart { margin-top: 28px; background: #def; border-radius:6px; padding:17px; }
-    table { border-collapse: collapse; width:100%; margin-top: 16px;}
-    th, td { border: 1px solid #ccc; padding: 9px 8px; }
+    .category-block { margin:36px 0 18px; padding-bottom: 6px; border-bottom:2px solid #009688;}
+    .category-name { font-size:1.5em; font-weight:600; color:#009688;}
+    table { border-collapse: collapse; width:100%; margin-bottom: 14px;}
+    th, td { border: 1px solid #ccc; padding: 8px 7px; }
     th { background: #eee;}
-    input[type="number"] { width: 56px; }
+    img { width:66px; height:66px; object-fit:cover; border-radius:6px; background:#ececec; }
+    input[type="number"] { width: 48px; }
+    .cart { margin-top: 38px; background: #def; border-radius:6px; padding:17px; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>Каталог товарів з Google Sheets</h2>
-    <div id="categories"></div>
+    <h2>Каталог з Google Sheets (категорії-блоки)</h2>
     <div id="productList"></div>
     <div class="cart">
       <h3>Кошик</h3>
@@ -32,107 +27,110 @@
     </div>
   </div>
 <script>
-const SHEET_ID = '1LKIfZIoC4wrrHBuX7YgcaQ22Xcq5sWNvq4ZlIzY6_VY'; // встав тут твій ID таблиці
-const SHEET_GID = '69860483'; // найчастіше 0
-
-const CSV_URL = `https://docs.google.com/spreadsheets/d/1LKIfZIoC4wrrHBuX7YgcaQ22Xcq5sWNvq4ZlIzY6_VY/edit?gid=69860483`;
-
-let allProducts = [];
-let filteredCategory = 'all';
+const SHEET_ID = '1LKIfZIoC4wrrHBuX7YgcaQ22Xcq5sWNvq4ZlIzY6_VY';  // example: '1AbCDefGhIjK...'
+const SHEET_GID = '69860483'; // зазвичай 0 для першого листу
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
+let dataRows = [];
 let cart = {};
 
-function parseCSV(csv){
+function parseCSV(csv) {
+  // Перетворюємо в масив рядків/масивів
   const lines = csv.split('\n').filter(x=>x.trim());
-  const headers = lines[0].split(',');
-  return lines.slice(1).map(line=>{
-    const cols = line.split(',');
-    return headers.reduce((acc, h, i)=>{acc[h.trim()] = cols[i]?.trim()||''; return acc;}, {});
-  }).filter(row => row[translate:Category] && row[translate:Name]);
+  return lines.map(line => line.split(','));
 }
 
-function renderCategories() {
-  const cats = ['all', ...Array.from(new Set(allProducts.map(p=>p[translate:Category])))];
-  document.getElementById('categories').innerHTML = cats.map(cat =>
-    `<button class="category-btn${filteredCategory === cat ? ' active' : ''}" onclick="selectCategory('${cat}')">
-      ${cat === 'all' ? 'Всі категорії' : cat}
-    </button>`
-  ).join('');
-}
-
-function selectCategory(cat) {
-  filteredCategory = cat;
-  renderCategories();
-  renderProducts();
+function groupByCategory(rows) {
+  let categories = [];
+  let cat = null;
+  rows.forEach((row, idx) => {
+    // Якщо Price/Cena (наприклад, 5-7 стовпець) порожній, і Full_Name/Article не порожні — це категорія
+    if ((row[1] || '').trim() && (row[4] || '') === '' && (row[0] || '') === '') {
+      cat = {
+        name: row[1].trim(),
+        items: []
+      };
+      categories.push(cat);
+    } else if (
+      cat && 
+      (row[1] || '').trim() && // Код товару чи артикул
+      (row[6] || '').trim() !== "" // Price
+    ) {
+      cat.items.push({
+        code: row[1],
+        name: row[3] || row[2] || '',   // Full_Name або Article
+        price: row[6],
+        image: row[0],
+        stock: row[7] || 100,  // Наприклад, колонка "Stock" якщо є, або дефолт
+        idx
+      });
+    }
+  });
+  return categories;
 }
 
 function renderProducts() {
-  let prods = filteredCategory === 'all' ?
-    allProducts : allProducts.filter(p => p[translate:Category] === filteredCategory);
-  if (prods.length === 0) {
-    document.getElementById('productList').innerHTML = '[translate:Немає товарів.]';
-    return;
-  }
-  let html = prods.map((prod,i)=>`
-    <div class="card">
-      <img src="${prod[translate:Image]||''}" alt="Фото"/>
-      <div class="info">
-        <p class="prodname">${prod[translate:Name]||prod[translate:Full_Name]||'Товар'}</p>
-        <div class="price">Ціна: ${prod[translate:Price]||'-'}</div>
-        <div>Залишок: ${prod[translate:Stock]||'-'}</div>
-        <div style="margin-top:7px">
-          <input type="number" id="qty_${i}" min="1" max="${prod[translate:Stock]||'99'}" value="1"/>
-          <button onclick="addToCart(${i})">Додати у кошик</button>
-        </div>
-      </div>
-    </div>
-  `).join('');
-  document.getElementById('productList').innerHTML = html;
+  let html = '';
+  const cats = groupByCategory(dataRows);
+  cats.forEach(cat => {
+    if (!cat.items.length) return;
+    html += `<div class="category-block"><span class="category-name">${cat.name}</span></div>`;
+    html += `<table><tr><th>Фото</th><th>Назва</th><th>Ціна</th><th>Додати</th></tr>`;
+    html += cat.items.map((prod,i)=>`
+      <tr>
+        <td>${prod.image?`<img src="${prod.image}" />`:''}</td>
+        <td>${prod.name}</td>
+        <td>${prod.price}</td>
+        <td>
+          <input type="number" id="qty_${cat.name}_${i}" min="1" max="${prod.stock}" value="1"/>
+          <button onclick="addToCart('${cat.name}',${i})">+</button>
+        </td>
+      </tr>
+    `).join('');
+    html += `</table>`;
+  });
+  document.getElementById('productList').innerHTML = html || 'Немає даних';
 }
 
-function addToCart(idx) {
-  let prods = filteredCategory === 'all' ?
-    allProducts : allProducts.filter(p => p[translate:Category] === filteredCategory);
-  const prod = prods[idx];
-  const input = document.getElementById('qty_' + idx);
+function addToCart(catName, idx) {
+  const cats = groupByCategory(dataRows);
+  const cat = cats.find(c=>c.name===catName);
+  const prod = cat.items[idx];
+  const input = document.getElementById('qty_' + catName + '_' + idx);
   const qty = parseInt(input.value);
-  if (!qty || qty < 1 || qty > +prod[translate:Stock]) return alert('[translate:Невірна кількість]');
-  const key = prod[translate:Name]||prod[translate:Full_Name];
+  if (!qty || qty < 1) return alert('Невірна кількість');
+  const key = `${catName}_${prod.name}`;
   if (!cart[key]) cart[key] = {...prod, quantity: 0};
   cart[key].quantity += qty;
   renderCart();
 }
-
 function renderCart() {
   const items = Object.values(cart);
   if (!items.length) {
-    document.getElementById('cartList').innerHTML = "[translate:Порожній]";
+    document.getElementById('cartList').innerHTML = "Порожній";
     document.getElementById('cartTotal').innerHTML = ""
     return;
   }
   let total = 0;
-  let html = `<table><tr><th>[translate:Товар]</th><th>[translate:Кількість]</th><th>[translate:Ціна]</th></tr>`;
+  let html = `<table><tr><th>Товар</th><th>Кількість</th><th>Ціна</th></tr>`;
   html += items.map(itm => {
-    let price = parseFloat(itm[translate:Price])||0;
-    let sum = price * itm.quantity;
+    let sum = parseFloat(itm.price)*itm.quantity;
     total += sum;
-    return `<tr><td>${itm[translate:Name]||itm[translate:Full_Name]}</td><td>${itm.quantity}</td><td>${sum}</td></tr>`;
+    return `<tr><td>${itm.name}</td><td>${itm.quantity}</td><td>${sum.toFixed(2)}</td></tr>`;
   }).join('');
   html += `</table>`;
   document.getElementById('cartList').innerHTML = html;
-  document.getElementById('cartTotal').innerHTML = `<b>[translate:Всього]: ${total}</b>`;
+  document.getElementById('cartTotal').innerHTML = `<b>Всього: ${total.toFixed(2)}</b>`;
 }
 
 fetch(CSV_URL)
   .then(res=>res.text())
   .then(csv=>{
-      allProducts = parseCSV(csv);
-      renderCategories();
+      dataRows = parseCSV(csv);
       renderProducts();
       cart = {};
       renderCart();
   });
 
-window.selectCategory = selectCategory;
 window.addToCart = addToCart;
 </script>
 </body>
