@@ -27,63 +27,37 @@
     </div>
   </div>
 <script>
-const SHEET_ID = '152HxMU_VnsB3wyyAcl1E1kWF04J31FU8Q_jOEV4lGjo';  // example: '1AbCDefGhIjK...'
-const SHEET_GID = '0'; // зазвичай 0 для першого листу
-
-// Ось правильний URL для CSV ЕКСПОРТУ!
-const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
+const SCRIPT_API_URL = "https://script.google.com/macros/s/AKfycbzboN7p7DQpxTg0hhpGlgwnmbXXj3E0CGKa2jtXjm1FRvWujXzxjQK1JTV_oiedI98Kyg/exec"; // заміни на свій!
 
 let dataRows = [];
 let cart = {};
 
-function parseCSV(csv) {
-  const lines = csv.split('\n').filter(x => x.trim());
-  return lines.map(line => line.split(','));
-}
-
 function groupByCategory(rows) {
-  let categories = [];
-  let cat = null;
-  rows.forEach((row, idx) => {
-    if ((row[1] || '').trim() && (row[4] || '') === '' && (row[0] || '') === '') {
-      cat = {
-        name: row[1].trim(),
-        items: []
-      };
-      categories.push(cat);
-    } else if (
-      cat &&
-      (row[1] || '').trim() &&
-      (row[6] || '').trim() !== ""
-    ) {
-      cat.items.push({
-        code: row[1],
-        name: row[3] || row[2] || '',
-        price: row[6],
-        image: row[0],
-        stock: row[7] || 100,
-        idx
-      });
-    }
+  let categories = {};
+  rows.forEach(prod => {
+    if (!prod.Category) return;
+    if (!categories[prod.Category]) categories[prod.Category] = [];
+    categories[prod.Category].push(prod);
   });
   return categories;
 }
 
-function renderProducts() {
+function renderProducts(rows) {
+  const cats = groupByCategory(rows);
   let html = '';
-  const cats = groupByCategory(dataRows);
-  cats.forEach(cat => {
-    if (!cat.items.length) return;
-    html += `<div class="category-block"><span class="category-name">${cat.name}</span></div>`;
+  Object.keys(cats).forEach(catName => {
+    const items = cats[catName];
+    if (!items.length) return;
+    html += `<div class="category-block"><span class="category-name">${catName}</span></div>`;
     html += `<table><tr><th>Фото</th><th>Назва</th><th>Ціна</th><th>Додати</th></tr>`;
-    html += cat.items.map((prod,i)=>`
+    html += items.map((prod, i) => `
       <tr>
-        <td>${prod.image?`<img src="${prod.image}" />`:''}</td>
-        <td>${prod.name}</td>
-        <td>${prod.price}</td>
+        <td>${prod.Image?`<img src="${prod.Image}" />`:''}</td>
+        <td>${prod.Full_Name}</td>
+        <td>${prod.Price}</td>
         <td>
-          <input type="number" id="qty_${cat.name}_${i}" min="1" max="${prod.stock}" value="1"/>
-          <button onclick="addToCart('${cat.name}',${i})">+</button>
+          <input type="number" id="qty_${catName}_${i}" min="1" max="${prod.Stock||100}" value="1"/>
+          <button onclick="addToCart('${catName}',${i})">+</button>
         </td>
       </tr>
     `).join('');
@@ -94,12 +68,11 @@ function renderProducts() {
 
 function addToCart(catName, idx) {
   const cats = groupByCategory(dataRows);
-  const cat = cats.find(c=>c.name===catName);
-  const prod = cat.items[idx];
+  const prod = cats[catName][idx];
   const input = document.getElementById('qty_' + catName + '_' + idx);
   const qty = parseInt(input.value);
   if (!qty || qty < 1) return alert('Невірна кількість');
-  const key = `${catName}_${prod.name}`;
+  const key = `${catName}_${prod.Full_Name}`;
   if (!cart[key]) cart[key] = {...prod, quantity: 0};
   cart[key].quantity += qty;
   renderCart();
@@ -114,21 +87,21 @@ function renderCart() {
   let total = 0;
   let html = `<table><tr><th>Товар</th><th>Кількість</th><th>Ціна</th></tr>`;
   html += items.map(itm => {
-    let sum = parseFloat(itm.price)*itm.quantity;
+    let sum = parseFloat(itm.Price)*itm.quantity;
     total += sum;
-    return `<tr><td>${itm.name}</td><td>${itm.quantity}</td><td>${sum.toFixed(2)}</td></tr>`;
+    return `<tr><td>${itm.Full_Name}</td><td>${itm.quantity}</td><td>${sum.toFixed(2)}</td></tr>`;
   }).join('');
   html += `</table>`;
   document.getElementById('cartList').innerHTML = html;
   document.getElementById('cartTotal').innerHTML = `<b>Всього: ${total.toFixed(2)}</b>`;
 }
 
-// Ось fetch по правильній CSV-URL!
-fetch(CSV_URL)
-  .then(res=>res.text())
-  .then(csv=>{
-      dataRows = parseCSV(csv);
-      renderProducts();
+// Основний запит до Apps Script API
+fetch(SCRIPT_API_URL)
+  .then(res => res.json())
+  .then(json => {
+      dataRows = json;
+      renderProducts(dataRows);
       cart = {};
       renderCart();
   });
