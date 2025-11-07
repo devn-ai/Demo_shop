@@ -2,112 +2,153 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8">
-  <title>Каталог з Google Sheets: категорії як шапки</title>
+  <title>Каталог із Google Sheets</title>
   <style>
     body { font-family: sans-serif; background: #f8f8f8; }
     .container { max-width: 980px; margin: auto; background: #fff; padding: 24px; border-radius:10px; }
-    .category-block { margin:36px 0 18px; padding-bottom: 6px; border-bottom:2px solid #009688;}
-    .category-name { font-size:1.5em; font-weight:600; color:#009688;}
+    .filters { margin-bottom: 18px; display: flex; gap: 16px; }
+    select { padding: 5px 12px; font-size: 1em; }
+    .product-card { display: flex; align-items: center; margin-bottom:14px; background:#f3f5fa; border-radius:7px; padding:10px 15px;}
+    .product-info { flex: 1 }
+    .product-title { font-size:1.1em; font-weight:500; margin-bottom:3px; }
+    .product-desc { color: #444; margin-bottom:6px;}
+    .product-price { color: #0c98c7; font-weight:700;}
+    .cart { margin-top: 38px; background: #def; border-radius:6px; padding:17px; }
     table { border-collapse: collapse; width:100%; margin-bottom: 14px;}
     th, td { border: 1px solid #ccc; padding: 8px 7px; }
     th { background: #eee;}
-    img { width:66px; height:66px; object-fit:cover; border-radius:6px; background:#ececec; }
     input[type="number"] { width: 48px; }
-    .cart { margin-top: 38px; background: #def; border-radius:6px; padding:17px; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>Каталог з Google Sheets (категорії-блоки)</h2>
-    <div id="productList"></div>
-    <div class="cart">
-      <h3>Кошик</h3>
-      <div id="cartList">Порожній</div>
-      <div id="cartTotal"></div>
-    </div>
+<div class="container">
+  <h2>Каталог з Google Sheets (фільтр категорій)</h2>
+  <div class="filters">
+    <label>Категорія:
+      <select id="categoryFilter" onchange="updateFilters()"></select>
+    </label>
+    <label>Підкатегорія:
+      <select id="subcategoryFilter" onchange="renderProducts()"></select>
+    </label>
   </div>
+  <div id="productList"></div>
+  <div class="cart">
+    <h3>Кошик</h3>
+    <div id="cartList">Порожній</div>
+    <div id="cartTotal"></div>
+  </div>
+</div>
 <script>
-const SCRIPT_API_URL = "https://script.google.com/macros/s/AKfycbzboN7p7DQpxTg0hhpGlgwnmbXXj3E0CGKa2jtXjm1FRvWujXzxjQK1JTV_oiedI98Kyg/exec"; // заміни на свій!
-
-let dataRows = [];
+const SHEET_ID = '152HxMU_VnsB3wyyAcl1E1kWF04J31FU8Q_jOEV4lGjo'; // example: '1AbCDefGhIjK...'
+const SHEET_GID = '0'; // зазвичай 0 для першого листу
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
+let allProducts = [];
 let cart = {};
 
-function groupByCategory(rows) {
-  let categories = {};
-  rows.forEach(prod => {
-    if (!prod.Category) return;
-    if (!categories[prod.Category]) categories[prod.Category] = [];
-    categories[prod.Category].push(prod);
+function parseCSV(csv) {
+  const lines = csv.split('\n').filter(line => line.trim());
+  const headers = lines[0].split(',');
+  return lines.slice(1).map(line => {
+    const obj = {};
+    const values = line.split(',');
+    headers.forEach((h, i) => obj[h.trim()] = (values[i]||'').trim());
+    return obj;
   });
-  return categories;
 }
 
-function renderProducts(rows) {
-  const cats = groupByCategory(rows);
+function updateFilters() {
+  const category = document.getElementById('categoryFilter').value;
+  // Generate subcategories
+  const subs = Array.from(new Set(allProducts
+    .filter(p=>!category || p.Category===category)
+    .map(p=>p.Subcategory))).filter(Boolean);
+  const subSel = document.getElementById('subcategoryFilter');
+  subSel.innerHTML = '<option value="">Усі</option>' + subs.map(sub =>
+    `<option value="${sub}">${sub}</option>`).join('');
+  renderProducts();
+}
+
+function renderFilters() {
+  // Generate category list
+  const cats = Array.from(new Set(allProducts.map(p=>p.Category))).filter(Boolean);
+  document.getElementById('categoryFilter').innerHTML =
+    '<option value="">Усі</option>' + cats.map(cat =>
+      `<option value="${cat}">${cat}</option>`).join('');
+  updateFilters();
+}
+
+function renderProducts() {
+  const cat = document.getElementById('categoryFilter').value;
+  const subcat = document.getElementById('subcategoryFilter').value;
+  let items = allProducts;
+  if (cat) items = items.filter(p=>p.Category === cat);
+  if (subcat) items = items.filter(p=>p.Subcategory === subcat);
+
   let html = '';
-  Object.keys(cats).forEach(catName => {
-    const items = cats[catName];
-    if (!items.length) return;
-    html += `<div class="category-block"><span class="category-name">${catName}</span></div>`;
-    html += `<table><tr><th>Фото</th><th>Назва</th><th>Ціна</th><th>Додати</th></tr>`;
-    html += items.map((prod, i) => `
-      <tr>
-        <td>${prod.Image?`<img src="${prod.Image}" />`:''}</td>
-        <td>${prod.Full_Name}</td>
-        <td>${prod.Price}</td>
-        <td>
-          <input type="number" id="qty_${catName}_${i}" min="1" max="${prod.Stock||100}" value="1"/>
-          <button onclick="addToCart('${catName}',${i})">+</button>
-        </td>
-      </tr>
+  if (!items.length) html = 'Немає даних для цієї категорії/підкатегорії.';
+  else {
+    html = items.map((prod,i)=>`
+      <div class="product-card">
+        <div class="product-info">
+          <div class="product-title">${prod.Full_Name}</div>
+          <div class="product-desc">${prod.Kod ? `Код: ${prod.Kod}` : ''} ${prod.PCS ? '| Одиниця: '+prod.PCS : ''}</div>
+          <div class="product-price">Ціна: ${prod.Price || '-'} грн</div>
+        </div>
+        <div>
+          <input type="number" id="qty_${i}" min="1" value="1"/>
+          <button onclick="addToCart(${i})">Додати</button>
+        </div>
+      </div>
     `).join('');
-    html += `</table>`;
-  });
-  document.getElementById('productList').innerHTML = html || 'Немає даних';
+  }
+  document.getElementById('productList').innerHTML = html;
 }
 
-function addToCart(catName, idx) {
-  const cats = groupByCategory(dataRows);
-  const prod = cats[catName][idx];
-  const input = document.getElementById('qty_' + catName + '_' + idx);
+function addToCart(idx) {
+  const cat = document.getElementById('categoryFilter').value;
+  const subcat = document.getElementById('subcategoryFilter').value;
+  let items = allProducts;
+  if (cat) items = items.filter(p=>p.Category === cat);
+  if (subcat) items = items.filter(p=>p.Subcategory === subcat);
+  const prod = items[idx];
+  const key = prod.Kod || prod.Full_Name;
+  const input = document.getElementById('qty_'+idx);
   const qty = parseInt(input.value);
   if (!qty || qty < 1) return alert('Невірна кількість');
-  const key = `${catName}_${prod.Full_Name}`;
   if (!cart[key]) cart[key] = {...prod, quantity: 0};
   cart[key].quantity += qty;
   renderCart();
 }
+
 function renderCart() {
   const items = Object.values(cart);
   if (!items.length) {
     document.getElementById('cartList').innerHTML = "Порожній";
-    document.getElementById('cartTotal').innerHTML = ""
+    document.getElementById('cartTotal').innerHTML = "";
     return;
   }
-  let total = 0;
-  let html = `<table><tr><th>Товар</th><th>Кількість</th><th>Ціна</th></tr>`;
+  let total = 0, html = `<table><tr><th>Товар</th><th>Кількість</th><th>Ціна</th></tr>`;
   html += items.map(itm => {
-    let sum = parseFloat(itm.Price)*itm.quantity;
+    let sum = parseFloat(itm.Price||0)*itm.quantity;
     total += sum;
     return `<tr><td>${itm.Full_Name}</td><td>${itm.quantity}</td><td>${sum.toFixed(2)}</td></tr>`;
   }).join('');
   html += `</table>`;
   document.getElementById('cartList').innerHTML = html;
-  document.getElementById('cartTotal').innerHTML = `<b>Всього: ${total.toFixed(2)}</b>`;
+  document.getElementById('cartTotal').innerHTML = `<b>Всього: ${total.toFixed(2)} грн</b>`;
 }
 
-// Основний запит до Apps Script API
-fetch(SCRIPT_API_URL)
-  .then(res => res.json())
-  .then(json => {
-      dataRows = json;
-      renderProducts(dataRows);
+fetch(CSV_URL)
+  .then(res=>res.text())
+  .then(csv=>{
+      allProducts = parseCSV(csv);
+      renderFilters();
       cart = {};
       renderCart();
   });
 
 window.addToCart = addToCart;
-
+window.updateFilters = updateFilters;
 </script>
 </body>
 </html>
