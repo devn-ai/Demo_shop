@@ -2,42 +2,54 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8">
-  <title>Каталог із Google Sheets</title>
+  <title>ЄВЖЕ — побутова хімія</title>
   <style>
-    body { font-family: sans-serif; background: #f8f8f8; }
-    .container { max-width: 980px; margin: auto; background: #fff; padding: 24px; border-radius:10px; }
-    .filters { margin-bottom: 18px; display: flex; gap: 16px; }
-    select { padding: 5px 12px; font-size: 1em; }
-    .product-card { display: flex; align-items: center; margin-bottom:14px; background:#f3f5fa; border-radius:7px; padding:10px 15px;}
-    .product-info { flex: 1 }
-    .product-title { font-size:1.1em; font-weight:500; margin-bottom:3px; }
-    .product-desc { color: #444; margin-bottom:6px;}
-    .product-price { color: #0c98c7; font-weight:700;}
-    .cart { margin-top: 38px; background: #def; border-radius:6px; padding:17px; }
+    body       { font-family: 'Montserrat', Arial, sans-serif; background: #42b2ec; margin:0; }
+    .container { max-width: 980px; margin: auto; background: #fff; padding: 24px; border-radius:14px; box-shadow: 0 2px 38px #259ed966; }
+    .logo-block { text-align:center; margin-bottom: 18px; }
+    .logo-block img { max-width: 290px; margin-top: 12px; border-radius: 12px; }
+    .filters label { color: #207bd2; font-size:1em; font-weight:500;}
+    select     { padding: 5px 12px; font-size: 1em; border-radius:8px; border:1px solid #42b2ec; }
+    .product-card { display: flex; align-items: center; margin-bottom:17px; background:#e6f6fd; border-radius:10px;
+      box-shadow: 0 2px 8px #bee4fa; padding:11px 18px;}
+    .product-title { font-size:1.18em; font-weight:600; letter-spacing:1px; margin-bottom:7px; color: #119adf;}
+    .product-desc  { color: #4d6696; margin-bottom:6px;}
+    .product-price { color: #2196F3; font-weight:700;}
+    .cart { margin-top: 34px; background: #def; border-radius:10px; padding:23px; box-shadow: 0 2px 12px #bee4fa;}
     table { border-collapse: collapse; width:100%; margin-bottom: 14px;}
-    th, td { border: 1px solid #ccc; padding: 8px 7px; }
-    th { background: #eee;}
-    input[type="number"] { width: 48px; }
+    th, td { border: 1px solid #afcde3; padding: 8px 7px; }
+    th { background: #d0edfc;}
+    input[type="number"] { width: 48px; border-radius:7px; border:1px solid #42b2ec;}
+    button { background: #42b2ec; color:#fff; border:none; font-weight:600; font-size:1em; padding:5px 16px; border-radius:7px; cursor:pointer; }
+    button:hover { background: #207bd2;}
+    @media (max-width:600px) {
+      .container { padding:6vw; border-radius:0; }
+      .product-card { flex-direction:column; gap:6px; }
+    }
   </style>
+  <link href="https://fonts.googleapis.com/css?family=Montserrat:400,600&display=swap" rel="stylesheet">
 </head>
 <body>
-<div class="container">
-  <h2>Каталог з Google Sheets (фільтр категорій)</h2>
-  <div class="filters">
-    <label>Категорія:
-      <select id="categoryFilter" onchange="updateFilters()"></select>
-    </label>
-    <label>Підкатегорія:
-      <select id="subcategoryFilter" onchange="renderProducts()"></select>
-    </label>
+  <div class="container">
+    <div class="logo-block">
+      <img src="https://github.com/devn-ai/Demo_shop/blob/main/logo.jpg?raw=true" alt="ЄВЖЕ логотип">
+      <div style="font-size:1.1em; color:#207bd2; font-weight:500; margin-top:8px;">побутова хімія за гуртовими цінами</div>
+    </div>
+    <div class="filters">
+      <label>Категорія:
+        <select id="categoryFilter" onchange="updateFilters()"></select>
+      </label>
+      <label>Підкатегорія:
+        <select id="subcategoryFilter" onchange="renderProducts()"></select>
+      </label>
+    </div>
+    <div id="productList"></div>
+    <div class="cart">
+      <h3>Кошик</h3>
+      <div id="cartList">Порожній</div>
+      <div id="cartTotal"></div>
+    </div>
   </div>
-  <div id="productList"></div>
-  <div class="cart">
-    <h3>Кошик</h3>
-    <div id="cartList">Порожній</div>
-    <div id="cartTotal"></div>
-  </div>
-</div>
 <script>
 const SHEET_ID = '152HxMU_VnsB3wyyAcl1E1kWF04J31FU8Q_jOEV4lGjo'; // example: '1AbCDefGhIjK...'
 const SHEET_GID = '0'; // зазвичай 0 для першого листу
