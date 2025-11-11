@@ -63,7 +63,7 @@
       <button id="orderBtn" onclick="openOrderModal()">Замовити</button>
     </div>
   </div>
-
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
 const SHEET_ID = '152HxMU_VnsB3wyyAcl1E1kWF04J31FU8Q_jOEV4lGjo'; // example: '1AbCDefGhIjK...'
 const SHEET_GID = '0'; // зазвичай 0 для першого листу
@@ -205,7 +205,61 @@ function submitOrder(e) {
   closeOrderModal();
   cart = {}; renderCart(); // можна очищати кошик після замовлення
 }
+function submitOrder(e) {
+  e.preventDefault();
+  let fd = new FormData(document.getElementById('orderForm'));
+  // Валідація
+  if (!fd.get('name') || fd.get('name').length < 4) {
+    alert('Введіть ПІБ (мінімум 4 символи)');
+    return;
+  }
+  const phone = fd.get('phone').replace(/[^\d]/g, '');
+  if (!/^(\+?380|380|0)\d{9}$/.test(fd.get('phone'))) {
+    alert('Введіть корректний номер телефону!');
+    return;
+  }
+  if (!fd.get('address') || fd.get('address').length < 5) {
+    alert('Введіть адресу доставки');
+    return;
+  }
+  if (fd.get('delivery') === 'novaposhta' && (!fd.get('npBranch') || fd.get('npBranch').length < 1)) {
+    alert('Введіть відділення Нової Пошти');
+    return;
+  }
+  // Формуємо тіло замовлення
+  let orderData = {
+    name: fd.get('name'),
+    phone: fd.get('phone'),
+    address: fd.get('address'),
+    delivery: fd.get('delivery'),
+    payment: fd.get('payment'),
+    npBranch: fd.get('delivery') === 'novaposhta' ? fd.get('npBranch') : '',
+    cart: Object.values(cart),
+    telegram_user: window.tgUser || '' // якщо дані з Telegram
+  };
 
+  // Відправити на вебхук
+  fetch('https://hook.eu2.make.com/3r3dmckvj5ia1wuw6nlid24s9gpwer8x', {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json' },
+    body: JSON.stringify(orderData)
+  })
+  .then(r => {
+    if (r.ok) {
+      alert('Замовлення передано! З Вами зв\'яжуться');
+      closeOrderModal();
+      cart = {}; renderCart();
+    } else {
+      alert('Помилка відправки!');
+    }
+  })
+  .catch(() => alert('Помилка зв\'язку'));
+}
+let tgUser = null;
+if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
+  tgUser = Telegram.WebApp.initDataUnsafe.user.username || (Telegram.WebApp.initDataUnsafe.user.first_name + ' ' + (Telegram.WebApp.initDataUnsafe.user.last_name||''));
+  window.tgUser = tgUser;
+}
 </script>
   <!-- Модальне вікно -->
 <div class="modal-overlay" id="orderModalOverlay" style="display:none;">
