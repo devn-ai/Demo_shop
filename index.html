@@ -24,6 +24,17 @@
     input[type="number"] { width: 48px; border-radius:7px; border:1px solid #42b2ec;}
     button { background: #42b2ec; color:#fff; border:none; font-weight:600; font-size:1em; padding:5px 16px; border-radius:7px; cursor:pointer; }
     button:hover { background: #207bd2;}
+    .modal-overlay {
+      position:fixed; left:0; top:0; width:100vw; height:100vh;
+      background:rgba(50,140,220,0.18); z-index:1004; display:flex; align-items:center; justify-content:center;
+    }
+    .modal-window {
+      background:#fff; border-radius:14px; padding:2.2em 2em; box-shadow:0 4px 48px #1ca2f9d6; min-width:320px; max-width:95vw;
+    }
+    @media (max-width:600px) {
+      .modal-window { padding:1.2em 0.7em; }
+    }
+
     @media (max-width:600px) {
       .container { padding:6vw; border-radius:0; }
       .product-card { flex-direction:column; gap:6px; }
@@ -49,8 +60,10 @@
       <h3>Кошик</h3>
       <div id="cartList">Порожній</div>
       <div id="cartTotal"></div>
+      <button id="orderBtn" onclick="openOrderModal()">Замовити</button>
     </div>
   </div>
+
 <script>
 const SHEET_ID = '152HxMU_VnsB3wyyAcl1E1kWF04J31FU8Q_jOEV4lGjo'; // example: '1AbCDefGhIjK...'
 const SHEET_GID = '0'; // зазвичай 0 для першого листу
@@ -162,6 +175,79 @@ fetch(CSV_URL)
 
 window.addToCart = addToCart;
 window.updateFilters = updateFilters;
+
+  function openOrderModal() {
+  if (!Object.keys(cart).length) { alert('Кошик порожній'); return; }
+  document.getElementById('orderModalOverlay').style.display = 'flex';
+}
+function closeOrderModal() {
+  document.getElementById('orderModalOverlay').style.display = 'none';
+}
+// Показувати/ховати поле для Нової Пошти
+function handleDeliveryChange() {
+  var v = document.getElementById('deliveryMethod').value;
+  document.getElementById('npBranchDiv').style.display = v === 'novaposhta' ? 'block' : 'none';
+}
+// Відправка (приклад для тесту, замість реального сервера)
+function submitOrder(e) {
+  e.preventDefault();
+  let fd = new FormData(document.getElementById('orderForm'));
+  let orderInfo =
+    'ПІБ: ' + fd.get('name') + '\n' +
+    'Телефон: ' + fd.get('phone') + '\n' +
+    'Адреса доставки: ' + fd.get('address') + '\n' +
+    'Доставка: ' + fd.get('delivery') +
+    (fd.get('delivery')==='novaposhta' ? ' | Відділ: '+(fd.get('npBranch')||'') : '') + '\n' +
+    'Оплата: ' + fd.get('payment') + '\n' +
+    'Замовлення:\n' +
+    Object.values(cart).map(itm => `${itm.Full_Name} — ${itm.quantity} x ${itm.Price} грн`).join('\n');
+  alert("Замовлення відправлено!\n\n" + orderInfo); // тут відправку на пошту/API під'єднати за потреби
+  closeOrderModal();
+  cart = {}; renderCart(); // можна очищати кошик після замовлення
+}
+
 </script>
+  <!-- Модальне вікно -->
+<div class="modal-overlay" id="orderModalOverlay" style="display:none;">
+  <div class="modal-window">
+    <h3>Оформлення замовлення</h3>
+    <form id="orderForm" onsubmit="submitOrder(event)">
+      <div>
+        <label>ПІБ:<br><input type="text" name="name" required></label>
+      </div>
+      <div>
+        <label>Телефон:<br><input type="tel" name="phone" required pattern="[\+0-9\s\-]{8,}"></label>
+      </div>
+      <div>
+        <label>Адреса доставки:<br><input type="text" name="address" required></label>
+      </div>
+      <div>
+        <label>Спосіб доставки:<br>
+          <select name="delivery" id="deliveryMethod" required onchange="handleDeliveryChange()">
+            <option value="courier">Кур'єр</option>
+            <option value="pickup">Самовивіз</option>
+            <option value="novaposhta">Нова пошта</option>
+          </select>
+        </label>
+      </div>
+      <div id="npBranchDiv" style="display:none;">
+        <label>Відділення Нової Пошти:<br><input type="text" name="npBranch"></label>
+      </div>
+      <div>
+        <label>Спосіб оплати:<br>
+          <select name="payment" required>
+            <option value="transfer">Переказ</option>
+            <option value="cash">Готівкою</option>
+          </select>
+        </label>
+      </div>
+      <div style="margin:10px 0;">
+        <button type="submit">Підтвердити замовлення</button>
+        <button type="button" onclick="closeOrderModal()" style="background:#eee; color:#226">Відмінити</button>
+      </div>
+    </form>
+  </div>
+</div>
 </body>
+  
 </html>
