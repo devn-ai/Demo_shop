@@ -235,7 +235,8 @@ function submitOrder(e) {
     payment: fd.get('payment'),
     npBranch: fd.get('delivery') === 'novaposhta' ? fd.get('npBranch') : '',
     cart: Object.values(cart),
-    telegram_user: window.tgUser || '' // якщо дані з Telegram
+    telegram_user: window.tgUser || '',// якщо дані з Telegram
+    telegram_id: windows.tgUserId || ''
   };
 
   // Відправити на вебхук
@@ -256,9 +257,13 @@ function submitOrder(e) {
   .catch(() => alert('Помилка зв\'язку'));
 }
 let tgUser = null;
+let tgUserId = null;
 if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
-  tgUser = Telegram.WebApp.initDataUnsafe.user.username || (Telegram.WebApp.initDataUnsafe.user.first_name + ' ' + (Telegram.WebApp.initDataUnsafe.user.last_name||''));
+  const tgu = Telegram.WebApp.initDataUnsafe.user;
+  tgUserId = tgu.id || '';
+  tgUserName = tgu.username || (tgu.first_name + ' ' + (tgu.last_name || ''));
   window.tgUser = tgUser;
+  window.tgUserId = tgUserId;
 }
 </script>
   <!-- Модальне вікно -->
